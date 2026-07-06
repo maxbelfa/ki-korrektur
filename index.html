@@ -1,0 +1,770 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>TINTMATCH — Farbkorrektur-Assistent</title>
+<style>
+  :root{
+    --bg:#15161a;
+    --panel:#1e2024;
+    --panel-2:#262930;
+    --border:#383b42;
+    --text:#eeeeec;
+    --text-dim:#9a9ca5;
+    --accent:#f2a93b;
+    --accent-dim:#7a5d29;
+    --good:#54e0bd;
+    --good-dim:#1f4a3f;
+    --bad:#e2574c;
+    --mono: 'SFMono-Regular', 'Consolas', 'Liberation Mono', Menlo, monospace;
+    --sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;background:var(--bg);color:var(--text);font-family:var(--sans);height:100%;}
+  body{-webkit-font-smoothing:antialiased;}
+  #app{max-width:480px;margin:0 auto;min-height:100vh;display:flex;flex-direction:column;background:var(--bg);position:relative;}
+
+  /* Header */
+  header{padding:18px 18px 12px;border-bottom:1px solid var(--border);}
+  .brand{display:flex;align-items:baseline;gap:8px;}
+  .brand .mark{width:10px;height:10px;background:var(--accent);border-radius:1px;transform:rotate(45deg);flex:none;}
+  .brand h1{font-family:var(--sans);font-weight:800;letter-spacing:0.06em;font-size:19px;margin:0;text-transform:uppercase;}
+  .brand .sub{color:var(--text-dim);font-size:11.5px;letter-spacing:0.03em;margin-top:2px;}
+
+  .steps{display:flex;gap:6px;padding:12px 18px 0;}
+  .step-pill{flex:1;height:3px;border-radius:2px;background:var(--border);}
+  .step-pill.done{background:var(--accent);}
+  .step-pill.active{background:var(--good);}
+  .step-labels{display:flex;justify-content:space-between;padding:6px 18px 14px;font-size:10px;letter-spacing:0.05em;text-transform:uppercase;color:var(--text-dim);}
+  .step-labels span.on{color:var(--text);}
+
+  main{flex:1;display:flex;flex-direction:column;padding:16px 18px 100px;gap:16px;}
+
+  h2.section-title{font-size:13px;text-transform:uppercase;letter-spacing:0.08em;color:var(--text-dim);margin:0 0 2px;font-weight:700;}
+  p.hint{font-size:13px;color:var(--text-dim);line-height:1.5;margin:0 0 4px;}
+
+  /* Formula rows */
+  .formula-card{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:14px;}
+  .formula-row{display:grid;grid-template-columns:1fr 74px 30px;gap:8px;margin-bottom:8px;align-items:center;}
+  .formula-row input, .formula-row select{
+    background:var(--panel-2);border:1px solid var(--border);color:var(--text);
+    border-radius:7px;padding:9px 8px;font-size:14px;font-family:var(--mono);width:100%;
+  }
+  .formula-row select{font-family:var(--sans);font-size:13px;}
+  .formula-row .pct{text-align:right;}
+  .rm-btn{background:none;border:1px solid var(--border);color:var(--text-dim);border-radius:7px;height:34px;cursor:pointer;font-size:15px;}
+  .rm-btn:active{background:var(--panel-2);}
+  .add-row{margin-top:4px;background:none;border:1px dashed var(--border);color:var(--accent);border-radius:7px;padding:9px;width:100%;font-size:13px;cursor:pointer;font-weight:600;letter-spacing:0.02em;}
+  .meta-field{margin-top:12px;}
+  .meta-field label{font-size:11px;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.05em;display:block;margin-bottom:5px;}
+  .meta-field input{width:100%;background:var(--panel-2);border:1px solid var(--border);color:var(--text);border-radius:7px;padding:10px;font-size:14px;}
+
+  /* Camera step */
+  .cam-wrap{position:relative;width:100%;aspect-ratio:3/4;background:#000;border-radius:14px;overflow:hidden;border:1px solid var(--border);}
+  video{width:100%;height:100%;object-fit:cover;display:block;}
+  canvas.hidden-canvas{display:none;}
+  .cam-overlay{position:absolute;inset:0;pointer-events:none;}
+  .bracket-frame{position:absolute;top:14%;left:6%;right:6%;bottom:22%;display:flex;}
+  .zone{flex:1;position:relative;margin:0 3px;}
+  .zone .corner{position:absolute;width:20px;height:20px;border-color:var(--accent);transition:border-color .2s;}
+  .zone.locked .corner{border-color:var(--good);}
+  .corner.tl{top:0;left:0;border-top:3px solid;border-left:3px solid;border-radius:4px 0 0 0;}
+  .corner.tr{top:0;right:0;border-top:3px solid;border-right:3px solid;border-radius:0 4px 0 0;}
+  .corner.bl{bottom:0;left:0;border-bottom:3px solid;border-left:3px solid;border-radius:0 0 0 4px;}
+  .corner.br{bottom:0;right:0;border-bottom:3px solid;border-right:3px solid;border-radius:0 0 4px 0;}
+  .zone-label{position:absolute;top:-22px;left:0;right:0;text-align:center;font-size:10px;letter-spacing:0.12em;color:var(--text-dim);text-transform:uppercase;font-weight:700;}
+  .zone-label.dim{color:#5f6169;font-weight:600;}
+  .zone.no-frame{display:flex;align-items:flex-end;justify-content:center;opacity:0.85;}
+  .divider{width:1px;background:rgba(255,255,255,0.15);}
+
+  .status-pill{position:absolute;top:12px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,0.55);backdrop-filter:blur(4px);border:1px solid var(--border);border-radius:20px;padding:6px 16px;font-size:11px;letter-spacing:0.08em;text-transform:uppercase;font-weight:700;color:var(--accent);}
+  .status-pill.ready{color:var(--good);border-color:var(--good-dim);}
+
+  .angle-readout{position:absolute;bottom:10px;left:10px;right:10px;background:rgba(0,0,0,0.55);backdrop-filter:blur(4px);border:1px solid var(--border);border-radius:10px;padding:10px 12px;display:flex;justify-content:space-between;align-items:center;}
+  .angle-readout .cur{font-family:var(--mono);font-size:22px;font-weight:600;color:var(--accent);}
+  .angle-readout .cur.ok{color:var(--good);}
+  .angle-readout .target{font-family:var(--mono);font-size:11px;color:var(--text-dim);text-align:right;line-height:1.4;}
+  .hold-ring{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:72px;height:72px;opacity:0;transition:opacity .15s;pointer-events:none;}
+  .hold-ring svg{width:100%;height:100%;transform:rotate(-90deg);}
+  .hold-ring .ring-bg{fill:none;stroke:rgba(255,255,255,0.18);stroke-width:4;}
+  .hold-ring .ring-fg{fill:none;stroke:var(--good);stroke-width:4;stroke-linecap:round;}
+
+  .cam-controls{display:flex;gap:10px;margin-top:12px;}
+  .btn{flex:1;padding:13px;border-radius:9px;border:none;font-size:14px;font-weight:700;letter-spacing:0.02em;cursor:pointer;text-transform:uppercase;font-family:var(--sans);}
+  .btn-primary{background:var(--accent);color:#211405;}
+  .btn-primary:disabled{opacity:0.4;}
+  .btn-ghost{background:none;border:1px solid var(--border);color:var(--text);}
+  .btn-good{background:var(--good);color:#062a20;}
+
+  .cam-msg{font-size:12.5px;color:var(--text-dim);text-align:center;padding:6px 4px;}
+
+  /* thumbnail review */
+  .shot-preview{width:100%;border-radius:12px;border:1px solid var(--border);overflow:hidden;}
+  .shot-preview img{width:100%;display:block;}
+  .shot-caption{display:flex;justify-content:space-between;align-items:center;padding:8px 2px 0;}
+  .shot-caption .tag{font-size:11px;letter-spacing:0.08em;text-transform:uppercase;color:var(--good);font-weight:700;}
+  .retake{background:none;border:none;color:var(--text-dim);font-size:12px;text-decoration:underline;cursor:pointer;}
+
+  .thumb-row{display:flex;gap:10px;}
+  .thumb-row .shot-preview{aspect-ratio:3/4;}
+  .thumb-row .shot-preview img{height:100%;object-fit:cover;}
+
+  /* results */
+  .diag-card{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:14px 16px;}
+  .diag-card h3{margin:0 0 6px;font-size:13px;text-transform:uppercase;letter-spacing:0.06em;color:var(--accent);}
+  .diag-card p{margin:0;font-size:14px;line-height:1.55;color:var(--text);}
+  .adj-item{display:flex;gap:12px;padding:12px 0;border-top:1px solid var(--border);}
+  .adj-item:first-child{border-top:none;}
+  .adj-dir{width:34px;height:34px;border-radius:8px;flex:none;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:16px;font-family:var(--mono);}
+  .adj-dir.up{background:var(--good-dim);color:var(--good);}
+  .adj-dir.down{background:#3a2320;color:var(--bad);}
+  .adj-dir.new{background:var(--accent-dim);color:var(--accent);}
+  .adj-body .code{font-family:var(--mono);font-weight:700;font-size:14px;color:var(--text);}
+  .adj-body .name{font-size:12.5px;color:var(--text-dim);margin-left:6px;}
+  .adj-body .reason{font-size:13px;color:var(--text);margin-top:3px;line-height:1.45;}
+
+  .disclaimer{font-size:11.5px;color:var(--text-dim);line-height:1.5;border-top:1px solid var(--border);padding-top:12px;}
+
+  .bottom-bar{position:fixed;bottom:0;left:0;right:0;background:linear-gradient(0deg, var(--bg) 60%, transparent);padding:18px 18px 22px;max-width:480px;margin:0 auto;}
+  #app{padding-bottom:0;}
+
+  .spinner{width:16px;height:16px;border:2px solid rgba(0,0,0,0.25);border-top-color:#211405;border-radius:50%;display:inline-block;animation:spin .7s linear infinite;vertical-align:-3px;margin-right:8px;}
+  @keyframes spin{to{transform:rotate(360deg);}}
+
+  .toast{position:fixed;bottom:100px;left:50%;transform:translateX(-50%);background:var(--panel-2);border:1px solid var(--border);padding:10px 16px;border-radius:8px;font-size:13px;max-width:88%;text-align:center;z-index:50;}
+</style>
+</head>
+<body>
+<div id="app">
+
+  <header>
+    <div class="brand"><div class="mark"></div><h1>TintMatch</h1></div>
+    <div class="sub">Geführte Musteraufnahme &amp; Rezeptur-Korrektur · Envirobase-Referenz</div>
+  </header>
+
+  <div class="steps">
+    <div class="step-pill" data-step="0"></div>
+    <div class="step-pill" data-step="1"></div>
+    <div class="step-pill" data-step="2"></div>
+    <div class="step-pill" data-step="3"></div>
+  </div>
+  <div class="step-labels">
+    <span data-step="0">Formel</span>
+    <span data-step="1">Face</span>
+    <span data-step="2">Flop</span>
+    <span data-step="3">Analyse</span>
+  </div>
+
+  <main id="main"></main>
+</div>
+
+<script>
+/* ---------------------------------------------------------------
+   Toner-Datenbank (Envirobase High Performance Tinting Guide)
+--------------------------------------------------------------- */
+const TONER_DB = [
+ // Mixing bases
+ {code:"T425",name:"Permanent Yellow",fam:"yellow",note:"Medium shade yellow, less green than T421."},
+ {code:"T4281",name:"Solid Yellow",fam:"yellow",note:"Bright green shade yellow, für Solidfarben."},
+ {code:"T421",name:"Olive",fam:"yellow",note:"Greenish yellow, primär Metallic/Perl/Effekt."},
+ {code:"T430",name:"High Strength Transparent Green",fam:"green",note:"Gelbstichiges Grün."},
+ {code:"T431",name:"High Strength Phthalo Green",fam:"green",note:"Blaustichiges Grün."},
+ {code:"T413",name:"Bright Blue",fam:"blue",note:"Grünstichiges Blau mit Rot-Flop."},
+ {code:"T412",name:"Transparent Blue",fam:"blue",note:"Mittleres Blau, grüner Flop. (T415 bei <1%)"},
+ {code:"T420",name:"High Strength Blue",fam:"blue",note:"Mittleres Blau, grüner Flop, satter als T412."},
+ {code:"T4311",name:"HC Green Blue",fam:"blue",note:"Mittleres Blau, höhere Chroma, grünerer/tieferer Flop als T412."},
+ {code:"T411",name:"Blue",fam:"blue",note:"Sauberes rotstichiges Phthaloblau."},
+ {code:"T414",name:"Rich Blue",fam:"blue",note:"Extrem rotstichiges Blau, röter als T411."},
+ {code:"T443",name:"Violet",fam:"violet",note:"Semi-transparentes Violett."},
+ {code:"T444",name:"Bordeaux",fam:"violet",note:"Transparentes Violett, macht Rot-Metallic blauer, dunkler im Flop als T438/T445."},
+ {code:"T445",name:"Transparent Magenta",fam:"violet",note:"Sauberer, transparenter, tieferer/blauerer Flop als T438."},
+ {code:"T4342",name:"HC Magenta",fam:"violet",note:"Höhere Chroma, tieferer Flop als T445."},
+ {code:"T438",name:"Rose",fam:"violet",note:"Magenta als blaustichiges Rot, sauberer/heller als T444."},
+ {code:"T422",name:"Yellow Oxide",fam:"yellow",note:"Opakes Gelboxid, primär Solidfarben. (T423 bei <1%)"},
+ {code:"T429",name:"Transparent Golden Yellow",fam:"yellow",note:"Schwaches, schmutziges Gelb, verdunkelt Flop."},
+ {code:"T426",name:"Warm Yellow",fam:"yellow",note:"Orangestichiges Gelb mit grünem Flop."},
+ {code:"T4321",name:"HC Yellow",fam:"yellow",note:"Höhere Chroma/tieferer Flop als T429."},
+ {code:"T427",name:"Yellow",fam:"yellow",note:"Orangestichiges organisches Gelb, Solidfarben."},
+ {code:"T432",name:"Transparent Red",fam:"orange",note:"Transparentes Eisenoxid, rot-goldener Tint."},
+ {code:"T4341",name:"HC Transparent Red",fam:"orange",note:"Höhere Chroma/tieferer Flop als T432."},
+ {code:"T433",name:"Brilliant Orange",fam:"orange",note:"Helles organisches Orange, Solidfarben."},
+ {code:"T436",name:"Red Oxide",fam:"red",note:"Opakes Rotoxid, Solidfarben. (T440 bei <1%)"},
+ {code:"T442",name:"Brown",fam:"orange",note:"Dunkelbraun, tieferer Flop als T432, Gold-Metallics."},
+ {code:"T435",name:"Salmon Red",fam:"orange",note:"Orangestichiges Rot, gelbste Rot-Familie."},
+ {code:"T4343",name:"HC Organic Red",fam:"red",note:"Perylene Maroon, höhere Chroma/tieferer Flop als T448."},
+ {code:"T448",name:"Russet",fam:"red",note:"Schmutziges Perylene Maroon, blauer als T436/T442."},
+ {code:"T447",name:"Bright Red",fam:"red",note:"Organisches Rot, Solidfarben."},
+ {code:"T441",name:"Carmine",fam:"red",note:"Helles Rot, gelber auf Face/Flop als T438."},
+ // Trace-Versionen (eigenständige Toner, für Anteile <1% / <5% der Basisfarbe)
+ {code:"T423",name:"Trace Yellow Oxide",fam:"yellow",note:"Spurenversion von T422 Yellow Oxide, für Anteile unter 1%."},
+ {code:"T440",name:"Trace Red Oxide",fam:"red",note:"Spurenversion von T436 Red Oxide, für Anteile unter 1%."},
+ {code:"T404",name:"Trace Blue Black",fam:"black",note:"Spurenversion von T406 Blue Black, für Anteile unter 1%."},
+ {code:"T415",name:"Trace Blue",fam:"blue",note:"Spurenversion von T412 Transparent Blue, für Anteile unter 1%."},
+ // Blacks & whites
+ {code:"T400",name:"White",fam:"white",note:"Sauberes, hochdeckendes Weiß. (T402 bei <5%)"},
+ {code:"T405",name:"Graphite Black",fam:"black",note:"Leichter Blauton auf Face, hellt Flop bei sehr dunklen Metallics auf."},
+ {code:"T406",name:"Blue Black",fam:"black",note:"Starkes blaustichiges Schwarz. (T404 bei <1%)"},
+ {code:"T407",name:"Jet Black",fam:"black",note:"Gelbstichiges Schwarz, für tiefen dunklen Flop bei Metallic."},
+ {code:"T409",name:"Deep Black",fam:"black",note:"Etwas blauer als T407 bei Metallic/hellen Solidfarben."},
+ // Metallics
+ {code:"T471",name:"Extra Fine Metallic",fam:"metallic",note:"Extra feines Metallic, heller Flop."},
+ {code:"T472",name:"Fine Lenticular Metallic",fam:"metallic",note:"Fein, hell, dunklerer Flop als T471."},
+ {code:"T473",name:"Medium Metallic",fam:"metallic",note:"Mittel, dunklerer Flop als T471."},
+ {code:"T474",name:"Fine Metallic",fam:"metallic",note:"Fein, dunklerer Flop als T471."},
+ {code:"T475",name:"Medium Lenticular Metallic",fam:"metallic",note:"Mittel-hell, dunklerer Flop als T472."},
+ {code:"T476",name:"Coarse Lenticular Metallic",fam:"metallic",note:"Grob, hell, dunklerer Flop als T475."},
+ {code:"T477",name:"Extra Coarse Metallic",fam:"metallic",note:"Extra grob, dunklerer Flop als T479."},
+ {code:"T479",name:"Coarse Silver Dollar Metallic",fam:"metallic",note:"Sehr hell, hellerer Flop als T476."},
+ {code:"T489",name:"Medium Gold Metallic",fam:"metallic",note:"Mittleres Gold-Aluminiumflake."},
+ {code:"T4040",name:"Orange Flash",fam:"metallic",note:"Tiefes rötlich-goldenes Flake, intensiver als T489."},
+ {code:"T4042",name:"Blue Aluminum",fam:"metallic",note:"Stark chromatisches blaues Lenticular-Aluminium."},
+ {code:"T4705",name:"Liquid Metal",fam:"metallic",note:"Vakuum-Metallflakes, geschmolzener Metall-Look."},
+ // Flop adjusters
+ {code:"T491",name:"Matting Base",fam:"adjuster",note:"Gröberer Flake-Look, hellt Flop auf."},
+ {code:"T402",name:"Trace White",fam:"adjuster",note:"Vergraut Face, hellt Flop bei Metallic."},
+ {code:"T403",name:"Micro White",fam:"adjuster",note:"Fügt Gelb auf Face, leichten Blauton auf Flop bei Metallic hinzu."},
+ // Pearls
+ {code:"T451",name:"Extra Fine White Pearl",fam:"pearl",note:"Weißes Face, sehr heller Flop."},
+ {code:"T452",name:"Fine White Pearl",fam:"pearl",note:"Sauberer als T451, hellerer Flop als T453."},
+ {code:"T453",name:"White Pearl",fam:"pearl",note:"Sauberer als T452, dunklerer Flop als T452."},
+ {code:"T455",name:"Fine Blue Pearl",fam:"pearl",note:"Blaues Face, kann Flop bei Metallic/Perl aufhellen."},
+ {code:"T456",name:"Blue Pearl",fam:"pearl",note:"Blaues Face, leicht gelblicher Flop in Weiß-Tricoat."},
+ {code:"T457",name:"Green Pearl",fam:"pearl",note:"Grünes Face, leicht rötlicher Flop."},
+ {code:"T458",name:"Blue-Green Pearl",fam:"pearl",note:"Blaugrünes Face, grüngelber Flop."},
+ {code:"T460",name:"Yellow Pearl",fam:"pearl",note:"Gelbes Face, leicht bläulicher Flop."},
+ {code:"T461",name:"Golden Yellow Pearl",fam:"pearl",note:"Goldgelbes Face, rötlich-goldener Flop."},
+ {code:"T466",name:"Orange Pearl",fam:"pearl",note:"Orangefarbenes Face, leicht grüner Flop."},
+ {code:"T459",name:"Copper Pearl",fam:"pearl",note:"Kupferfarbenes Face, dunkler Kupfer-Flop."},
+ {code:"T465",name:"Red Pearl",fam:"pearl",note:"Rot-magentafarbenes Face, leicht grünlicher Flop."},
+ {code:"T454",name:"Bright Red Pearl",fam:"pearl",note:"Helles Rot-Face, dunkler als T462 im Flop."},
+ {code:"T462",name:"Fine Red Pearl",fam:"pearl",note:"Rotes Face, helles Rot im Flop."},
+ {code:"T468",name:"Violet Pearl",fam:"pearl",note:"Violettes Face, grüngelber Flop."},
+ // Special effects
+ {code:"T4000",name:"Crystal Silver",fam:"effect",note:"Helles, funkelndes Weiß-Effekt."},
+ {code:"T4003",name:"Galaxy Blue",fam:"effect",note:"Funkelnder blauer Effekt."},
+ {code:"T4004",name:"Stellar Green",fam:"effect",note:"Funkelnder grüner Effekt."},
+ {code:"T4007",name:"Cosmic Turquoise",fam:"effect",note:"Marineblaues Flake-Pigment."},
+ {code:"T4001",name:"Sunbeam Gold",fam:"effect",note:"Funkelnder Gold-Effekt."},
+ {code:"T4006",name:"Fireside Copper",fam:"effect",note:"Funkelnder Kupfer-Effekt."},
+ {code:"T4005",name:"Solaris Red",fam:"effect",note:"Funkelnder Magenta-Rot-Effekt."},
+ {code:"T4002",name:"Radiant Red",fam:"effect",note:"Funkelnder Rot-Effekt."},
+ {code:"T4008",name:"Amethyst Dream",fam:"effect",note:"Funkelnder Violett-Effekt."},
+ {code:"T4031",name:"Autumn Mystery",fam:"effect",note:"Farbwechsel: Rot → Gold → Bronze → Grün."},
+ {code:"T4032",name:"Viola Fantasy",fam:"effect",note:"Farbwechsel: Violett → Silber → Grün → Blau."},
+ {code:"T4033",name:"Arctic Fire",fam:"effect",note:"Farbwechsel: Türkis → Silber → Rot."},
+ {code:"T4034",name:"Tropic Sunrise",fam:"effect",note:"Farbwechsel: Grün → Silber → Rotorange."},
+ {code:"T4035",name:"Lapis Sunlight",fam:"effect",note:"Farbwechsel: Gold → Grün → Blau."},
+ {code:"T4018",name:"Prism Silver",fam:"effect",note:"Silberflake mit diffraktivem Regenbogeneffekt."},
+ {code:"T4037",name:"Silver Glass Flake",fam:"effect",note:"Silber-Glasflakes, starkes Funkeln in Sonnenlicht."},
+ {code:"T4020",name:"Green to Purple",fam:"effect",note:"Colorshift: Grün → Violett."},
+ {code:"T4021",name:"Silver to Green",fam:"effect",note:"Colorshift: Silber → Grün."},
+ {code:"T4022",name:"Gold to Silver",fam:"effect",note:"Colorshift: Gold → Silber."},
+ {code:"T4023",name:"Cyan to Purple",fam:"effect",note:"Colorshift: Cyan → Violett."},
+ {code:"T4024",name:"Blue to Red",fam:"effect",note:"Colorshift: Blau → Rot."},
+ {code:"T4025",name:"Magenta to Gold",fam:"effect",note:"Colorshift: Magenta → Gold."},
+ {code:"T4026",name:"Red to Gold",fam:"effect",note:"Colorshift: Rot → Gold."},
+];
+TONER_DB.sort((a,b)=> parseInt(a.code.slice(1),10) - parseInt(b.code.slice(1),10));
+const TONER_MAP = Object.fromEntries(TONER_DB.map(t=>[t.code,t]));
+
+/* ---------------------------------------------------------------
+   State
+--------------------------------------------------------------- */
+const state = {
+  step: 0,
+  formula: [],
+  vehicleInfo: "",
+  shots: { face:null, flop:null },
+  stream: null,
+  selectedDeviceId: null,
+  analysis: null,
+};
+
+const TARGET_ANGLE = { face: 6, flop: 60 }; // beta≈0: flach von oben (Vogelperspektive) · beta≈60: flacher Streiflicht-Winkel
+const TOLERANCE = 9;
+const HOLD_MS = 1500;
+
+const $main = document.getElementById('main');
+
+/* ---------------------------------------------------------------
+   Render router
+--------------------------------------------------------------- */
+function render(){
+  document.querySelectorAll('.step-pill').forEach(p=>{
+    const i = +p.dataset.step;
+    p.classList.toggle('done', i < state.step);
+    p.classList.toggle('active', i === state.step);
+  });
+  document.querySelectorAll('.step-labels span').forEach(s=>{
+    s.classList.toggle('on', +s.dataset.step <= state.step);
+  });
+
+  stopCamera();
+  if(state.step === 0) renderFormulaStep();
+  else if(state.step === 1) renderCameraStep('face');
+  else if(state.step === 2) renderCameraStep('flop');
+  else renderAnalysisStep();
+}
+
+/* ---------------------------------------------------------------
+   Step 0 — Formula
+--------------------------------------------------------------- */
+function renderFormulaStep(){
+  const options = '<option value="" disabled selected>Toner wählen…</option>'
+    + TONER_DB.map(t=>`<option value="${t.code}">${t.code} — ${t.name}</option>`).join('');
+  $main.innerHTML = `
+    <h2 class="section-title">Ausgangsrezeptur</h2>
+    <p class="hint">Trage die aktuelle Formel des Musters ein, mit dem du den Kotflügel/das Bauteil abgleichst. Menge in Gramm, nur Punkt als Dezimaltrennzeichen (z. B. 3.6).</p>
+    <div class="formula-card">
+      <div id="rows"></div>
+      <button class="add-row" id="addRow">+ Toner hinzufügen</button>
+      <div class="meta-field">
+        <label>Bauteile / Notiz (optional)</label>
+        <input id="vehicleInfo" placeholder="z. B. Stoßstange vs. Kotflügel, VW T-Roc, Pure White" value="${state.vehicleInfo}">
+      </div>
+    </div>
+    <div class="bottom-bar">
+      <button class="btn btn-primary" id="toFace" style="width:100%">Weiter zur Face-Aufnahme →</button>
+    </div>
+  `;
+  const rowsEl = document.getElementById('rows');
+
+  function sanitizeGram(raw){
+    let v = raw.replace(/[^0-9.]/g,'');       // nur Ziffern und Punkt zulassen (kein Komma)
+    const parts = v.split('.');
+    if(parts.length > 2) v = parts[0] + '.' + parts.slice(1).join('');
+    return v;
+  }
+
+  function drawRows(){
+    if(state.formula.length === 0){
+      rowsEl.innerHTML = '<p class="hint" style="margin:4px 0 10px;">Noch keine Toner hinzugefügt.</p>';
+      return;
+    }
+    rowsEl.innerHTML = `
+      <div class="formula-row" style="margin-bottom:2px;">
+        <div style="font-size:10px;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.05em;">Toner</div>
+        <div style="font-size:10px;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.05em;text-align:right;">Menge (g)</div>
+        <div></div>
+      </div>
+      ${state.formula.map((row,i)=>`
+      <div class="formula-row" data-i="${i}">
+        <select class="tonerSel">${options}</select>
+        <input class="pct" type="text" inputmode="decimal" placeholder="z. B. 3.6" value="${row.g}">
+        <button class="rm-btn">✕</button>
+      </div>
+    `).join('')}`;
+    rowsEl.querySelectorAll('.formula-row[data-i]').forEach((rowEl)=>{
+      const i = +rowEl.dataset.i;
+      const sel = rowEl.querySelector('.tonerSel');
+      sel.value = state.formula[i].code;
+      sel.onchange = ()=> state.formula[i].code = sel.value;
+      const pct = rowEl.querySelector('.pct');
+      pct.oninput = ()=>{
+        const clean = sanitizeGram(pct.value);
+        pct.value = clean;
+        state.formula[i].g = clean;
+      };
+      rowEl.querySelector('.rm-btn').onclick = ()=>{
+        state.formula.splice(i,1); drawRows();
+      };
+    });
+  }
+  drawRows();
+  document.getElementById('addRow').onclick = ()=>{
+    state.formula.push({code:"", g:""}); drawRows();
+  };
+  document.getElementById('vehicleInfo').oninput = (e)=> state.vehicleInfo = e.target.value;
+  document.getElementById('toFace').onclick = ()=>{
+    const incomplete = state.formula.length === 0 || state.formula.some(r=>!r.code || r.g === "");
+    if(incomplete){ showToast('Bitte bei jedem Toner Code und Menge angeben.'); return; }
+    state.step = 1; render();
+  };
+}
+
+/* ---------------------------------------------------------------
+   Step 1 & 2 — Guided camera capture
+--------------------------------------------------------------- */
+function stopCamera(){
+  if(state.stream){
+    state.stream.getTracks().forEach(t=>t.stop());
+    state.stream = null;
+  }
+  window.removeEventListener('deviceorientation', orientationHandler);
+}
+
+let holdStart = null;
+let rafId = null;
+let currentMode = null;
+let orientationSupported = false;
+let lastAngle = null;
+
+function renderCameraStep(mode){
+  currentMode = mode;
+  const label = mode === 'face' ? 'FACE-WINKEL' : 'FLOP-WINKEL';
+  const instructions = mode === 'face'
+    ? 'Lege das lackierte Farbmuster in den Rahmen und halte das Bauteil (z. B. Kotflügel) direkt daneben. Kamera senkrecht von oben — Vogelperspektive, wie beim Fotografieren eines Dokuments.'
+    : 'Jetzt das Handy deutlich abflachen — ein flacher Streiflicht-Winkel, in etwa 60° zur Oberfläche.';
+  const targetLabel = mode === 'face' ? 'ZIEL ~0–10° (Aufsicht)' : 'ZIEL ~60° (Streiflicht)';
+
+  $main.innerHTML = `
+    <h2 class="section-title">Aufnahme — ${label}</h2>
+    <p class="hint">${instructions}</p>
+    <div class="cam-wrap">
+      <video id="video" autoplay playsinline muted></video>
+      <canvas class="hidden-canvas" id="canvas"></canvas>
+      <div class="cam-overlay">
+        <div class="status-pill" id="statusPill">Sensor wird kalibriert…</div>
+        <div class="hold-ring" id="holdRing">
+          <svg viewBox="0 0 44 44">
+            <circle class="ring-bg" cx="22" cy="22" r="19"></circle>
+            <circle class="ring-fg" id="ringFg" cx="22" cy="22" r="19" stroke-dasharray="119.4" stroke-dashoffset="119.4"></circle>
+          </svg>
+        </div>
+        <div class="bracket-frame">
+          <div class="zone" id="zoneLeft">
+            <div class="zone-label">Muster · im Rahmen</div>
+            <div class="corner tl"></div><div class="corner tr"></div>
+            <div class="corner bl"></div><div class="corner br"></div>
+          </div>
+          <div class="divider"></div>
+          <div class="zone no-frame" id="zoneRight">
+            <div class="zone-label dim">Bauteil · frei halten</div>
+          </div>
+        </div>
+        <div class="angle-readout">
+          <div class="cur" id="curAngle">—°</div>
+          <div class="target">${targetLabel}<br>Halte ruhig zum Auslösen</div>
+        </div>
+      </div>
+    </div>
+    <div class="cam-msg" id="camMsg">Kamera wird gestartet…</div>
+    <select id="camSelect" style="display:none;width:100%;background:var(--panel-2);border:1px solid var(--border);color:var(--text);border-radius:7px;padding:9px;font-size:13px;margin-top:8px;"></select>
+    <div class="cam-controls">
+      <button class="btn btn-ghost" id="manualShot">Manuell auslösen</button>
+      <button class="btn btn-primary" id="enableTilt">Neigungssensor aktivieren</button>
+    </div>
+  `;
+
+  startCamera();
+  document.getElementById('manualShot').onclick = ()=> capture(mode);
+  document.getElementById('enableTilt').onclick = requestTilt;
+}
+
+async function listCameras(){
+  try{
+    const devices = await navigator.mediaDevices.enumerateDevices();
+    const cams = devices.filter(d=>d.kind === 'videoinput');
+    const sel = document.getElementById('camSelect');
+    if(!sel || cams.length < 2) return; // nur anzeigen wenn Auswahl sinnvoll ist (z.B. Handy mit mehreren Objektiven)
+    sel.style.display = 'block';
+    sel.innerHTML = cams.map((c,i)=>{
+      const label = c.label || `Kamera ${i+1}`;
+      // Rückkamera meist zuerst / mit "back"/"rear" im Namen erkennbar
+      return `<option value="${c.deviceId}">${label}</option>`;
+    }).join('');
+    // versuche automatisch die rückwärtige/Haupt-Kamera vorzuwählen
+    const back = cams.find(c=>/back|rear|environment/i.test(c.label));
+    if(back){ sel.value = back.deviceId; state.selectedDeviceId = back.deviceId; }
+    sel.onchange = ()=>{ state.selectedDeviceId = sel.value; startCamera(); };
+  }catch(e){ /* enumerateDevices kann vor erster Erlaubnis fehlschlagen, ignorieren */ }
+}
+
+async function startCamera(){
+  if (!window.isSecureContext) {
+    document.getElementById('camMsg').innerHTML =
+      '⚠️ Kein Kamerazugriff: Diese Seite läuft nicht in einem "sicheren Kontext" (kein HTTPS, keine localhost-Adresse). '
+      + 'Browser blockieren Kamera/Mikrofon grundsätzlich bei Dateien, die per Doppelklick als <code>file://…</code> geöffnet werden. '
+      + 'Lies dir dazu die Hosting-Hinweise unterhalb der App-Vorschau durch — dort stehen die schnellsten Lösungen.';
+    return;
+  }
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    document.getElementById('camMsg').textContent =
+      '⚠️ Dieser Browser unterstützt keinen Kamerazugriff (getUserMedia fehlt). Bitte einen aktuellen Chrome/Safari/Firefox verwenden.';
+    return;
+  }
+  if(state.stream){ state.stream.getTracks().forEach(t=>t.stop()); state.stream = null; }
+  try{
+    const videoConstraints = state.selectedDeviceId
+      ? { deviceId:{ exact: state.selectedDeviceId }, width:{ideal:1280}, height:{ideal:1280} }
+      : { facingMode:{ ideal:'environment' }, width:{ideal:1280}, height:{ideal:1280} };
+    const stream = await navigator.mediaDevices.getUserMedia({ video: videoConstraints, audio:false });
+    state.stream = stream;
+    const video = document.getElementById('video');
+    video.srcObject = stream;
+    const track = stream.getVideoTracks()[0];
+    const isFront = track && /front|user/i.test(track.label);
+    document.getElementById('camMsg').textContent = isFront
+      ? 'Kamera aktiv (Frontkamera — bei Laptops normal, da sie nur eine Kamera haben). Farbmuster in den Rahmen legen.'
+      : 'Kamera aktiv. Farbmuster in den Rahmen legen, Bauteil frei daneben halten.';
+    requestTilt(); // try immediately (Android doesn't need explicit permission)
+    listCameras(); // Labels sind erst nach erteilter Erlaubnis verfügbar
+  }catch(err){
+    let extra = '';
+    if(err.name === 'NotAllowedError') extra = ' Prüfe die Kamera-Berechtigung für diese Seite in den Browser-/System-Einstellungen (evtl. wurde sie einmal abgelehnt und muss zurückgesetzt werden).';
+    if(err.name === 'NotFoundError') extra = ' Es wurde keine Kamera gefunden.';
+    if(err.name === 'NotReadableError') extra = ' Die Kamera wird evtl. gerade von einer anderen App benutzt.';
+    if(err.name === 'OverconstrainedError'){ state.selectedDeviceId = null; extra = ' Gewählte Kamera nicht verfügbar, versuche Standardkamera erneut.'; }
+    document.getElementById('camMsg').innerHTML =
+      'Kein Kamerazugriff möglich (' + err.name + ': ' + err.message + ').' + extra;
+  }
+}
+
+async function requestTilt(){
+  if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function'){
+    try{
+      const res = await DeviceOrientationEvent.requestPermission();
+      if(res === 'granted') attachOrientation();
+      else fallbackNoSensor();
+    }catch(e){ fallbackNoSensor(); }
+  } else if ('DeviceOrientationEvent' in window){
+    attachOrientation();
+  } else {
+    fallbackNoSensor();
+  }
+}
+
+function attachOrientation(){
+  orientationSupported = true;
+  window.addEventListener('deviceorientation', orientationHandler);
+  const pill = document.getElementById('statusPill');
+  if(pill) pill.textContent = 'Winkel wird gemessen…';
+}
+
+function fallbackNoSensor(){
+  const pill = document.getElementById('statusPill');
+  if(pill) pill.textContent = 'Kein Neigungssensor — manuell auslösen';
+  const angleEl = document.getElementById('curAngle');
+  if(angleEl) angleEl.textContent = 'n/a';
+}
+
+const RING_CIRCUMFERENCE = 119.4; // 2 * PI * r(19)
+
+function orientationHandler(e){
+  if(e.beta === null || currentMode === null) return;
+  const beta = Math.abs(e.beta); // 0 = flach, 90 = senkrecht
+  lastAngle = beta;
+  const target = TARGET_ANGLE[currentMode];
+  const diff = Math.abs(beta - target);
+  const ok = diff <= TOLERANCE;
+
+  const angleEl = document.getElementById('curAngle');
+  const pill = document.getElementById('statusPill');
+  const zL = document.getElementById('zoneLeft');
+  const ring = document.getElementById('holdRing');
+  const ringFg = document.getElementById('ringFg');
+  if(!angleEl || !pill) return;
+
+  angleEl.textContent = Math.round(beta) + '°';
+  angleEl.classList.toggle('ok', ok);
+  pill.classList.toggle('ready', ok);
+  zL.classList.toggle('locked', ok);
+
+  if(ok){
+    if(holdStart === null) holdStart = performance.now();
+    const held = performance.now() - holdStart;
+    const progress = Math.min(held / HOLD_MS, 1); // 0 → 1, 12 Uhr im Uhrzeigersinn bis wieder 12 Uhr
+    if(ring) ring.style.opacity = '1';
+    if(ringFg) ringFg.style.strokeDashoffset = String(RING_CIRCUMFERENCE * (1 - progress));
+    pill.textContent = held >= HOLD_MS ? 'Auslösen…' : 'Ausgerichtet · halten…';
+    if(held >= HOLD_MS){
+      holdStart = null;
+      if(ring) ring.style.opacity = '0';
+      capture(currentMode);
+    }
+  } else {
+    holdStart = null;
+    if(ring) ring.style.opacity = '0';
+    if(ringFg) ringFg.style.strokeDashoffset = String(RING_CIRCUMFERENCE);
+    if(currentMode === 'face'){
+      pill.textContent = beta > target ? 'Flacher halten (Aufsicht) ↓' : 'Leicht anheben ↑';
+    } else {
+      pill.textContent = beta < target ? 'Weiter aufrichten (flacher Winkel) ↑' : 'Etwas absenken ↓';
+    }
+  }
+}
+
+function capture(mode){
+  const video = document.getElementById('video');
+  const canvas = document.getElementById('canvas');
+  if(!video || !video.videoWidth) return;
+  canvas.width = video.videoWidth;
+  canvas.height = video.videoHeight;
+  const ctx = canvas.getContext('2d');
+  ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+  const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+  state.shots[mode] = dataUrl;
+  showToast(mode === 'face' ? 'Face-Winkel aufgenommen ✓' : 'Flop-Winkel aufgenommen ✓');
+  stopCamera();
+  renderReview(mode);
+}
+
+function renderReview(mode){
+  const label = mode === 'face' ? 'Face-Winkel' : 'Flop-Winkel';
+  $main.innerHTML = `
+    <h2 class="section-title">${label} — Vorschau</h2>
+    <div class="shot-preview">
+      <img src="${state.shots[mode]}">
+    </div>
+    <div class="shot-caption">
+      <span class="tag">Aufgenommen</span>
+      <button class="retake" id="retake">Neu aufnehmen</button>
+    </div>
+    <div class="bottom-bar">
+      <button class="btn btn-primary" id="continueBtn" style="width:100%">
+        ${mode === 'face' ? 'Weiter zu Flop-Winkel →' : 'Weiter zur Analyse →'}
+      </button>
+    </div>
+  `;
+  document.getElementById('retake').onclick = ()=>{ renderCameraStep(mode); };
+  document.getElementById('continueBtn').onclick = ()=>{
+    state.step = mode === 'face' ? 2 : 3;
+    render();
+  };
+}
+
+/* ---------------------------------------------------------------
+   Step 3 — Analysis (Claude vision call)
+--------------------------------------------------------------- */
+function renderAnalysisStep(){
+  $main.innerHTML = `
+    <h2 class="section-title">Analyse</h2>
+    <div class="thumb-row">
+      <div class="shot-preview"><img src="${state.shots.face}"></div>
+      <div class="shot-preview"><img src="${state.shots.flop}"></div>
+    </div>
+    <div class="formula-card">
+      <h2 class="section-title" style="margin-bottom:8px;">Aktuelle Formel</h2>
+      ${state.formula.map(r=>{
+        const t = TONER_MAP[r.code];
+        return `<div style="font-family:var(--mono);font-size:13px;padding:4px 0;">${r.code} <span style="color:var(--text-dim)">— ${t?t.name:''}</span> <span style="float:right">${r.g} g</span></div>`;
+      }).join('')}
+    </div>
+    <div id="resultZone"></div>
+    <div class="bottom-bar" id="analyzeBar">
+      <button class="btn btn-primary" id="runAnalysis" style="width:100%">KI-Farbanalyse starten</button>
+    </div>
+  `;
+  document.getElementById('runAnalysis').onclick = runAnalysis;
+}
+
+async function runAnalysis(){
+  const btn = document.getElementById('runAnalysis');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span>Analysiere Face &amp; Flop…';
+
+  const dbSnippet = TONER_DB.map(t=>`${t.code} (${t.fam}): ${t.name} — ${t.note}`).join('\n');
+  const formulaSnippet = state.formula.map(r=>`${r.code} ${r.g} g`).join(', ');
+
+  const sysPrompt = `Du bist ein erfahrener Farbtoner/Colorist für Autolack-Reparaturlackierung (PPG Envirobase High Performance, Wasserbasis).
+Du bekommst zwei Fotos desselben Vergleichs: ein "Face"-Winkel-Foto (senkrechte Aufsicht von oben, wie beim Fotografieren eines Dokuments) und ein "Flop"-Winkel-Foto (flacher Streiflicht-Winkel, ca. 60° zur Oberfläche), jeweils mit dem selbst angemischten Farbmuster (in einem Rahmen) und dem originalen Fahrzeugbauteil direkt daneben im Bild.
+Vergleiche Muster gegen Bauteil auf beiden Fotos bezüglich Helligkeit, Buntton, Sättigung und – falls Metallic/Perl sichtbar – Face/Flop-Verhalten der Flakes.
+Berücksichtige: Handyfotos sind nicht farbkalibriert (Licht, Weißabgleich), daher gib nur qualitative, vorsichtige Einschätzungen, keine exakten numerischen Werte.
+Hier ist die aktuelle Rezeptur (Mengenangaben in Gramm): ${formulaSnippet}
+Hier ist die Toner-Referenzdatenbank (Code, Familie, Name, Charakteristik) als Nachschlagewerk, wähle Korrekturvorschläge NUR aus dieser Liste:
+${dbSnippet}
+Antworte AUSSCHLIESSLICH als JSON, ohne Markdown-Codeblock, in diesem Format:
+{
+  "diagnosis_face": "kurzer Absatz auf Deutsch, was auf dem Face-Winkel abweicht",
+  "diagnosis_flop": "kurzer Absatz auf Deutsch, was auf dem Flop-Winkel abweicht",
+  "adjustments": [
+    {"code":"T-Code aus der Liste","direction":"increase|decrease|add","reason":"kurze Begründung auf Deutsch, max 2 Sätze"}
+  ],
+  "confidence_note": "ein Satz zur Unsicherheit der Einschätzung (Beleuchtung/Kalibrierung)"
+}`;
+
+  try{
+    const response = await fetch("/api/analyze", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: "claude-sonnet-4-6",
+        max_tokens: 1000,
+        messages: [{
+          role: "user",
+          content: [
+            { type:"text", text: sysPrompt },
+            { type:"text", text:"Face-Winkel-Foto:" },
+            { type:"image", source:{ type:"base64", media_type:"image/jpeg", data: state.shots.face.split(',')[1] } },
+            { type:"text", text:"Flop-Winkel-Foto:" },
+            { type:"image", source:{ type:"base64", media_type:"image/jpeg", data: state.shots.flop.split(',')[1] } },
+          ]
+        }]
+      })
+    });
+    const data = await response.json();
+    if(data.error){
+      const msg = typeof data.error === 'string' ? data.error : (data.error.message || JSON.stringify(data.error));
+      throw new Error(msg);
+    }
+    if(!data.content){
+      throw new Error('Unerwartete Antwort vom Server: ' + JSON.stringify(data).slice(0,200));
+    }
+    const text = data.content.map(b=>b.text||"").join("\n").trim()
+      .replace(/^```json/,'').replace(/```$/,'').trim();
+    const parsed = JSON.parse(text);
+    state.analysis = parsed;
+    renderResult(parsed);
+  }catch(err){
+    document.getElementById('resultZone').innerHTML = `
+      <div class="diag-card"><h3>Fehler</h3><p>Die Analyse konnte nicht abgeschlossen werden (${err.message}). Bitte erneut versuchen.</p></div>
+    `;
+    btn.disabled = false;
+    btn.textContent = 'Erneut versuchen';
+  }
+}
+
+function renderResult(a){
+  document.getElementById('analyzeBar').style.display = 'none';
+  const dirGlyph = {increase:'+', decrease:'–', add:'＋'};
+  document.getElementById('resultZone').innerHTML = `
+    <div class="diag-card">
+      <h3>Face-Winkel</h3>
+      <p>${a.diagnosis_face}</p>
+    </div>
+    <div class="diag-card">
+      <h3>Flop-Winkel</h3>
+      <p>${a.diagnosis_flop}</p>
+    </div>
+    <div class="diag-card">
+      <h3>Korrekturvorschlag</h3>
+      ${a.adjustments.map(adj=>{
+        const t = TONER_MAP[adj.code] || {name:'', note:''};
+        const cls = adj.direction === 'decrease' ? 'down' : (adj.direction === 'add' ? 'new' : 'up');
+        return `
+        <div class="adj-item">
+          <div class="adj-dir ${cls}">${dirGlyph[adj.direction]||'~'}</div>
+          <div class="adj-body">
+            <span class="code">${adj.code}</span><span class="name">${t.name}</span>
+            <div class="reason">${adj.reason}</div>
+          </div>
+        </div>`;
+      }).join('')}
+    </div>
+    <div class="disclaimer">
+      ${a.confidence_note}<br><br>
+      Hinweis: Diese Einschätzung basiert auf unkalibrierten Handyfotos und ersetzt keine spektrophotometrische Messung. Trage Korrekturen in kleinen Schritten auf und prüfe jeweils mit einem neuen Spritzmuster.
+    </div>
+    <div class="bottom-bar">
+      <button class="btn btn-ghost" id="restartBtn" style="width:100%">Neue Prüfung starten</button>
+    </div>
+  `;
+  document.getElementById('restartBtn').onclick = ()=>{
+    state.step = 0; state.shots = {face:null, flop:null}; state.analysis = null;
+    render();
+  };
+}
+
+function showToast(msg){
+  const t = document.createElement('div');
+  t.className = 'toast';
+  t.textContent = msg;
+  document.body.appendChild(t);
+  setTimeout(()=>t.remove(), 1800);
+}
+
+render();
+</script>
+</body>
+</html>
