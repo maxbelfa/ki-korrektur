@@ -65,30 +65,22 @@
   video{width:100%;height:100%;object-fit:cover;display:block;}
   canvas.hidden-canvas{display:none;}
   .cam-overlay{position:absolute;inset:0;pointer-events:none;}
-  .bracket-frame{position:absolute;top:14%;left:6%;right:6%;bottom:22%;display:flex;}
-  .zone{flex:1;position:relative;margin:0 3px;}
-  .zone .corner{position:absolute;width:20px;height:20px;border-color:var(--accent);transition:border-color .2s;}
-  .zone.locked .corner{border-color:var(--good);}
-  .corner.tl{top:0;left:0;border-top:3px solid;border-left:3px solid;border-radius:4px 0 0 0;}
-  .corner.tr{top:0;right:0;border-top:3px solid;border-right:3px solid;border-radius:0 4px 0 0;}
-  .corner.bl{bottom:0;left:0;border-bottom:3px solid;border-left:3px solid;border-radius:0 0 0 4px;}
-  .corner.br{bottom:0;right:0;border-bottom:3px solid;border-right:3px solid;border-radius:0 0 4px 0;}
-  .zone-label{position:absolute;top:-22px;left:0;right:0;text-align:center;font-size:10px;letter-spacing:0.12em;color:var(--text-dim);text-transform:uppercase;font-weight:700;}
-  .zone-label.dim{color:#5f6169;font-weight:600;}
-  .zone.no-frame{display:flex;align-items:flex-end;justify-content:center;opacity:0.85;}
-  .divider{width:1px;background:rgba(255,255,255,0.15);}
+  .split-line{position:absolute;top:8%;bottom:16%;left:50%;width:2px;background:rgba(255,255,255,0.85);transition:background-color .2s, box-shadow .2s;}
+  .split-line.locked{background:var(--good);box-shadow:0 0 10px var(--good);}
+  .split-label{position:absolute;top:4%;font-size:10px;letter-spacing:0.12em;text-transform:uppercase;font-weight:700;color:rgba(255,255,255,0.85);text-shadow:0 1px 3px rgba(0,0,0,0.6);}
+  .split-label.left{left:8%;}
+  .split-label.right{right:8%;}
 
   .status-pill{position:absolute;top:12px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,0.55);backdrop-filter:blur(4px);border:1px solid var(--border);border-radius:20px;padding:6px 16px;font-size:11px;letter-spacing:0.08em;text-transform:uppercase;font-weight:700;color:var(--accent);}
   .status-pill.ready{color:var(--good);border-color:var(--good-dim);}
 
-  .angle-readout{position:absolute;bottom:10px;left:10px;right:10px;background:rgba(0,0,0,0.55);backdrop-filter:blur(4px);border:1px solid var(--border);border-radius:10px;padding:10px 12px;display:flex;justify-content:space-between;align-items:center;}
+  .angle-readout{position:absolute;bottom:100px;left:10px;right:10px;background:rgba(0,0,0,0.55);backdrop-filter:blur(4px);border:1px solid var(--border);border-radius:10px;padding:10px 12px;display:flex;justify-content:space-between;align-items:center;}
   .angle-readout .cur{font-family:var(--mono);font-size:22px;font-weight:600;color:var(--accent);}
   .angle-readout .cur.ok{color:var(--good);}
   .angle-readout .target{font-family:var(--mono);font-size:11px;color:var(--text-dim);text-align:right;line-height:1.4;}
-  .hold-ring{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:72px;height:72px;opacity:0;transition:opacity .15s;pointer-events:none;}
-  .hold-ring svg{width:100%;height:100%;transform:rotate(-90deg);}
-  .hold-ring .ring-bg{fill:none;stroke:rgba(255,255,255,0.18);stroke-width:4;}
-  .hold-ring .ring-fg{fill:none;stroke:var(--good);stroke-width:4;stroke-linecap:round;}
+  .shutter-btn{position:absolute;bottom:16px;left:50%;transform:translateX(-50%);width:68px;height:68px;border-radius:50%;background:rgba(0,0,0,0.35);border:3px solid rgba(255,255,255,0.85);pointer-events:auto;display:flex;align-items:center;justify-content:center;padding:0;cursor:pointer;-webkit-tap-highlight-color:transparent;}
+  .shutter-btn:active .shutter-inner{transform:scale(0.82);}
+  .shutter-inner{width:52px;height:52px;border-radius:50%;background:#fff;transition:transform .1s ease;}
 
   .cam-controls{display:flex;gap:10px;margin-top:12px;}
   .btn{flex:1;padding:13px;border-radius:9px;border:none;font-size:14px;font-weight:700;letter-spacing:0.02em;cursor:pointer;text-transform:uppercase;font-family:var(--sans);}
@@ -114,6 +106,8 @@
   .crop-handle[data-h="br"]{right:-13px;bottom:-13px;cursor:nwse-resize;}
   .shot-caption{display:flex;justify-content:space-between;align-items:center;padding:8px 2px 0;}
   .shot-caption .tag{font-size:11px;letter-spacing:0.08em;text-transform:uppercase;color:var(--good);font-weight:700;}
+  .glare-warn{margin-top:10px;padding:10px 12px;border-radius:8px;font-size:12.5px;line-height:1.5;background:#332612;border:1px solid var(--accent-dim);color:#f2d9a8;}
+  .glare-warn.strong{background:#3a2320;border-color:var(--bad);color:#f3c1bc;}
   .retake{background:none;border:none;color:var(--text-dim);font-size:12px;text-decoration:underline;cursor:pointer;}
 
   .thumb-row{display:flex;gap:10px;}
@@ -425,7 +419,7 @@ function renderCameraStep(mode){
   currentMode = mode;
   const label = mode === 'face' ? 'FACE-WINKEL' : 'FLOP-WINKEL';
   const instructions = mode === 'face'
-    ? 'Lege das lackierte Farbmuster in den Rahmen und halte das Bauteil (z. B. Kotflügel) direkt daneben. Kamera senkrecht von oben — Vogelperspektive, wie beim Fotografieren eines Dokuments.'
+    ? 'Halte das lackierte Farbmuster links von der weißen Linie und das Bauteil (z. B. Kotflügel) rechts davon. Kamera senkrecht von oben — Vogelperspektive, wie beim Fotografieren eines Dokuments.'
     : 'Jetzt das Handy deutlich abflachen — ein flacher Streiflicht-Winkel, in etwa 60° zur Oberfläche.';
   const targetLabel = mode === 'face' ? 'ZIEL ~0–10° (Aufsicht)' : 'ZIEL ~60° (Streiflicht)';
 
@@ -437,34 +431,20 @@ function renderCameraStep(mode){
       <canvas class="hidden-canvas" id="canvas"></canvas>
       <div class="cam-overlay">
         <div class="status-pill" id="statusPill">Sensor wird kalibriert…</div>
-        <div class="hold-ring" id="holdRing">
-          <svg viewBox="0 0 44 44">
-            <circle class="ring-bg" cx="22" cy="22" r="19"></circle>
-            <circle class="ring-fg" id="ringFg" cx="22" cy="22" r="19" stroke-dasharray="119.4" stroke-dashoffset="119.4"></circle>
-          </svg>
-        </div>
-        <div class="bracket-frame">
-          <div class="zone" id="zoneLeft">
-            <div class="zone-label">Muster · im Rahmen</div>
-            <div class="corner tl"></div><div class="corner tr"></div>
-            <div class="corner bl"></div><div class="corner br"></div>
-          </div>
-          <div class="divider"></div>
-          <div class="zone no-frame" id="zoneRight">
-            <div class="zone-label dim">Bauteil · frei halten</div>
-          </div>
-        </div>
+        <div class="split-line" id="splitLine"></div>
+        <div class="split-label left">Muster</div>
+        <div class="split-label right">Bauteil</div>
         <div class="angle-readout">
           <div class="cur" id="curAngle">—°</div>
-          <div class="target">${targetLabel}<br>Halte ruhig zum Auslösen</div>
+          <div class="target">${targetLabel}<br>Winkel ausrichten, dann Auslöser tippen</div>
         </div>
+        <button class="shutter-btn" id="manualShot" aria-label="Foto auslösen"><span class="shutter-inner"></span></button>
       </div>
     </div>
     <div class="cam-msg" id="camMsg">Kamera wird gestartet…</div>
     <select id="camSelect" style="display:none;width:100%;background:var(--panel-2);border:1px solid var(--border);color:var(--text);border-radius:7px;padding:9px;font-size:13px;margin-top:8px;"></select>
     <div class="cam-controls">
-      <button class="btn btn-ghost" id="manualShot">Manuell auslösen</button>
-      <button class="btn btn-primary" id="enableTilt">Neigungssensor aktivieren</button>
+      <button class="btn btn-primary" id="enableTilt" style="width:100%">Neigungssensor aktivieren</button>
     </div>
   `;
 
@@ -517,8 +497,8 @@ async function startCamera(){
     const track = stream.getVideoTracks()[0];
     const isFront = track && /front|user/i.test(track.label);
     document.getElementById('camMsg').textContent = isFront
-      ? 'Kamera aktiv (Frontkamera — bei Laptops normal, da sie nur eine Kamera haben). Farbmuster in den Rahmen legen.'
-      : 'Kamera aktiv. Farbmuster in den Rahmen legen, Bauteil frei daneben halten.';
+      ? 'Kamera aktiv (Frontkamera — bei Laptops normal, da sie nur eine Kamera haben). Muster links, Bauteil rechts von der Linie.'
+      : 'Kamera aktiv. Farbmuster links von der weißen Linie halten, Bauteil rechts.';
     requestTilt(); // try immediately (Android doesn't need explicit permission)
     listCameras(); // Labels sind erst nach erteilter Erlaubnis verfügbar
   }catch(err){
@@ -560,8 +540,6 @@ function fallbackNoSensor(){
   if(angleEl) angleEl.textContent = 'n/a';
 }
 
-const RING_CIRCUMFERENCE = 119.4; // 2 * PI * r(19)
-
 function orientationHandler(e){
   if(e.beta === null || currentMode === null) return;
   const beta = Math.abs(e.beta); // 0 = flach, 90 = senkrecht
@@ -572,9 +550,7 @@ function orientationHandler(e){
 
   const angleEl = document.getElementById('curAngle');
   const pill = document.getElementById('statusPill');
-  const zL = document.getElementById('zoneLeft');
-  const ring = document.getElementById('holdRing');
-  const ringFg = document.getElementById('ringFg');
+  const zL = document.getElementById('splitLine');
   if(!angleEl || !pill) return;
 
   angleEl.textContent = Math.round(beta) + '°';
@@ -583,26 +559,11 @@ function orientationHandler(e){
   zL.classList.toggle('locked', ok);
 
   if(ok){
-    if(holdStart === null) holdStart = performance.now();
-    const held = performance.now() - holdStart;
-    const progress = Math.min(held / HOLD_MS, 1); // 0 → 1, 12 Uhr im Uhrzeigersinn bis wieder 12 Uhr
-    if(ring) ring.style.opacity = '1';
-    if(ringFg) ringFg.style.strokeDashoffset = String(RING_CIRCUMFERENCE * (1 - progress));
-    pill.textContent = held >= HOLD_MS ? 'Auslösen…' : 'Ausgerichtet · halten…';
-    if(held >= HOLD_MS){
-      holdStart = null;
-      if(ring) ring.style.opacity = '0';
-      capture(currentMode);
-    }
+    pill.textContent = 'Ausgerichtet · Auslöser tippen';
+  } else if(currentMode === 'face'){
+    pill.textContent = beta > target ? 'Flacher halten (Aufsicht) ↓' : 'Leicht anheben ↑';
   } else {
-    holdStart = null;
-    if(ring) ring.style.opacity = '0';
-    if(ringFg) ringFg.style.strokeDashoffset = String(RING_CIRCUMFERENCE);
-    if(currentMode === 'face'){
-      pill.textContent = beta > target ? 'Flacher halten (Aufsicht) ↓' : 'Leicht anheben ↑';
-    } else {
-      pill.textContent = beta < target ? 'Weiter aufrichten (flacher Winkel) ↑' : 'Etwas absenken ↓';
-    }
+    pill.textContent = beta < target ? 'Weiter aufrichten (flacher Winkel) ↑' : 'Etwas absenken ↓';
   }
 }
 
@@ -621,6 +582,44 @@ function capture(mode){
   renderReview(mode);
 }
 
+/* ---------------------------------------------------------------
+   Blendungs-/Reflexions-Check — rein lokal per Canvas, kein KI-Aufruf,
+   kostet also nichts. Erkennt großflächig überbelichtete (rein weiße)
+   Bereiche, wie sie durch Klarlack-Spiegelungen entstehen.
+--------------------------------------------------------------- */
+function checkGlare(dataUrl){
+  const img = new Image();
+  img.onload = ()=>{
+    const w = Math.min(img.naturalWidth, 300);
+    const h = Math.round(img.naturalHeight * (w / img.naturalWidth));
+    const c = document.createElement('canvas');
+    c.width = w; c.height = h;
+    const ctx = c.getContext('2d');
+    ctx.drawImage(img, 0, 0, w, h);
+    let overexposed = 0;
+    const data = ctx.getImageData(0, 0, w, h).data;
+    const total = w * h;
+    for(let i=0; i<data.length; i+=4){
+      if(data[i] > 244 && data[i+1] > 244 && data[i+2] > 244) overexposed++;
+    }
+    const pct = Math.round((overexposed/total)*1000)/10;
+    const el = document.getElementById('glareWarn');
+    if(!el) return;
+    if(pct > 6){
+      el.className = 'glare-warn strong';
+      el.innerHTML = `⚠️ Starke Reflexion erkannt (~${pct}% der Fläche überbelichtet). Der Klarlack spiegelt hier zu stark — an dieser Stelle geht Farbinformation verloren. Empfehlung: Polfilter aufs Objektiv, diffuses statt direktes Licht, oder Muster/Bauteil leicht drehen und neu aufnehmen.`;
+    } else if(pct > 2){
+      el.className = 'glare-warn';
+      el.innerHTML = `⚠️ Leichte Reflexion erkannt (~${pct}%). Für ein noch saubereres Ergebnis: Blickwinkel oder Licht leicht anpassen.`;
+    } else {
+      el.className = '';
+      el.innerHTML = '';
+    }
+  };
+  img.onerror = ()=>{};
+  img.src = dataUrl;
+}
+
 function renderReview(mode){
   const label = mode === 'face' ? 'Face-Winkel' : 'Flop-Winkel';
   $main.innerHTML = `
@@ -632,6 +631,7 @@ function renderReview(mode){
       <span class="tag">Aufgenommen</span>
       <button class="retake" id="retake">Neu aufnehmen</button>
     </div>
+    <div id="glareWarn"></div>
     <div class="cam-controls">
       <button class="btn btn-ghost" id="cropBtn" style="width:100%">✂ Zuschneiden (Umgebung entfernen)</button>
     </div>
@@ -647,6 +647,7 @@ function renderReview(mode){
     state.step = mode === 'face' ? 2 : 3;
     render();
   };
+  checkGlare(state.shots[mode]);
 }
 
 /* ---------------------------------------------------------------
@@ -776,11 +777,11 @@ async function runAnalysis(){
   const dbSnippet = TONER_DB.map(t=>`${t.code} (${t.fam}): ${t.name} — ${t.note}`).join('\n');
   const formulaSnippet = state.formula.map(r=>`${r.code} ${r.g} g`).join(', ');
 
-  const sysPrompt = `Du bist ein erfahrener Farbtoner/Colorist für Autolack-Reparaturlackierung (PPG Envirobase High Performance, Wasserbasis).
+  // STATISCHER Teil: identisch bei jeder Anfrage -> wird gecacht (10x günstiger ab dem 2. Aufruf).
+  const staticSystemText = `Du bist ein erfahrener Farbtoner/Colorist für Autolack-Reparaturlackierung (PPG Envirobase High Performance, Wasserbasis).
 Du bekommst zwei Fotos desselben Vergleichs: ein "Face"-Winkel-Foto (senkrechte Aufsicht von oben, wie beim Fotografieren eines Dokuments) und ein "Flop"-Winkel-Foto (flacher Streiflicht-Winkel, ca. 60° zur Oberfläche), jeweils mit dem selbst angemischten Farbmuster (in einem Rahmen) und dem originalen Fahrzeugbauteil direkt daneben im Bild.
 Vergleiche Muster gegen Bauteil auf beiden Fotos bezüglich Helligkeit, Buntton, Sättigung und – falls Metallic/Perl sichtbar – Face/Flop-Verhalten der Flakes.
 Berücksichtige: Handyfotos sind nicht farbkalibriert (Licht, Weißabgleich), daher gib nur qualitative, vorsichtige Einschätzungen, keine exakten numerischen Werte.
-Hier ist die aktuelle Rezeptur (Mengenangaben in Gramm): ${formulaSnippet}
 Hier ist die Toner-Referenzdatenbank (Code, Familie, Name, Charakteristik) als Nachschlagewerk, wähle Korrekturvorschläge NUR aus dieser Liste:
 ${dbSnippet}
 Antworte AUSSCHLIESSLICH als JSON, ohne Markdown-Codeblock, in diesem Format:
@@ -801,7 +802,12 @@ Regeln für "adjustments":
 - "percent" ist die prozentuale Änderung der Menge (0-100), IMMER angeben bei increase/decrease, bezogen auf die aktuelle Gramm-Menge dieses Toners in der Rezeptur.
 - Bei "code", der bereits in der aktuellen Rezeptur vorkommt: direction increase/decrease/remove.
 - Bei "add" (neuer Toner, der noch nicht in der Rezeptur ist): percent bezieht sich stattdessen auf die Gesamtmenge der aktuellen Rezeptur (z.B. "add" mit percent 5 bedeutet ca. 5% der Gesamtmasse als Startmenge).
-- Schlage nur wenige, gezielte Korrekturen vor (typischerweise 1-3), keine Änderung an jedem Toner.`;
+- Schlage nur wenige, gezielte Korrekturen vor (typischerweise 1-3), keine Änderung an jedem Toner.
+- WICHTIG — ursächlichen Toner identifizieren: Schlage immer den Toner vor, der die auffälligste Abweichung tatsächlich verursacht, nicht pauschal irgendeinen naheliegenden Toner. Beispiele: Wirkt ein Blauton zu dunkel/schwärzlich, liegt das meist am Schwarzanteil (z.B. T405/T406/T407/T409) — diesen reduzieren. Wirkt ein Farbton zu milchig/blass/hell, liegt das meist am Weißanteil (z.B. T400/T402) — diesen reduzieren. Wirkt ein Farbton in die falsche Richtung verschoben (z.B. zu grün, zu rot, zu gelb), liegt das an einem Bunttoner dieser Familie — diesen anpassen. Denke wie ein erfahrener Colorist: welcher einzelne Toner in der Rezeptur erklärt die Abweichung am wahrscheinlichsten, und genau den anfassen.
+- T491 (Matting Base) ZURÜCKHALTEND einsetzen: T491 verändert primär die Grobheit/den Flop der Metallic-Flakes, NICHT den eigentlichen Farbton. Schlage T491 nur vor, wenn es klar erkennbar um Textur/Grobheit/Flop-Charakter des Flakes geht — NIEMALS als Standardlösung, wenn eine Farbe schlicht zu hell oder zu dunkel wirkt. Helligkeit lässt sich in aller Regel sauberer über Schwarz-/Weißanteil oder den betroffenen Buntton korrigieren.`;
+
+  // DYNAMISCHER Teil: ändert sich bei jeder Analyse (Rezeptur + Fotos) -> nicht gecacht.
+  const dynamicText = `Aktuelle Rezeptur dieses Auftrags (Mengenangaben in Gramm): ${formulaSnippet}\nAnalysiere die folgenden zwei Fotos:`;
 
   try{
     const response = await fetch("/api/analyze", {
@@ -810,10 +816,13 @@ Regeln für "adjustments":
       body: JSON.stringify({
         model: "claude-sonnet-4-6",
         max_tokens: 1000,
+        system: [
+          { type:"text", text: staticSystemText, cache_control: { type:"ephemeral" } }
+        ],
         messages: [{
           role: "user",
           content: [
-            { type:"text", text: sysPrompt },
+            { type:"text", text: dynamicText },
             { type:"text", text:"Face-Winkel-Foto:" },
             { type:"image", source:{ type:"base64", media_type:"image/jpeg", data: state.shots.face.split(',')[1] } },
             { type:"text", text:"Flop-Winkel-Foto:" },
