@@ -839,9 +839,21 @@ Regeln für "adjustments":
     if(!data.content){
       throw new Error('Unerwartete Antwort vom Server: ' + JSON.stringify(data).slice(0,200));
     }
-    const text = data.content.map(b=>b.text||"").join("\n").trim()
-      .replace(/^```json/,'').replace(/```$/,'').trim();
-    const parsed = JSON.parse(text);
+    let rawText = data.content.map(b=>b.text||"").join("\n").trim();
+    // Markdown-Codezäune robust entfernen (egal ob ```json, ``` JSON, oder Groß/Kleinschreibung)
+    rawText = rawText.replace(/^```[a-zA-Z]*\s*/,'').replace(/```\s*$/,'').trim();
+    // Falls die KI trotzdem Text vor/nach dem JSON anhängt: nur den äußersten {...}-Block behalten
+    const firstBrace = rawText.indexOf('{');
+    const lastBrace = rawText.lastIndexOf('}');
+    if(firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace){
+      rawText = rawText.slice(firstBrace, lastBrace + 1);
+    }
+    let parsed;
+    try{
+      parsed = JSON.parse(rawText);
+    }catch(parseErr){
+      throw new Error('Antwort konnte nicht gelesen werden (' + parseErr.message + '). Rohtext: ' + rawText.slice(0,180));
+    }
     state.analysis = parsed;
     renderResult(parsed);
   }catch(err){
