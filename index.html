@@ -467,11 +467,34 @@ function renderCameraStep(mode){
     <div class="cam-controls">
       <button class="btn btn-primary" id="enableTilt" style="width:100%">Neigungssensor aktivieren</button>
     </div>
+    <p class="hint" style="margin-top:14px;">Für maximale Bildqualität stattdessen die native Kamera-App verwenden (schärfer, mehr Details) — Rahmen/Winkelhilfe entfallen dann, das Foto lässt sich danach aber trotzdem zuschneiden:</p>
+    <div class="cam-controls">
+      <label class="btn btn-ghost" style="text-align:center;">📷 Kamera-App öffnen
+        <input type="file" accept="image/*" capture="environment" id="nativeCam" style="display:none;">
+      </label>
+      <label class="btn btn-ghost" style="text-align:center;">🖼 Aus Fotos wählen
+        <input type="file" accept="image/*" id="nativeLib" style="display:none;">
+      </label>
+    </div>
   `;
 
   startCamera();
   document.getElementById('manualShot').onclick = ()=> capture(mode);
   document.getElementById('enableTilt').onclick = requestTilt;
+
+  function handleNativeFile(e){
+    const file = e.target.files && e.target.files[0];
+    if(!file) return;
+    const reader = new FileReader();
+    reader.onload = ()=>{
+      state.shots[mode] = reader.result;
+      stopCamera();
+      renderReview(mode);
+    };
+    reader.readAsDataURL(file);
+  }
+  document.getElementById('nativeCam').onchange = handleNativeFile;
+  document.getElementById('nativeLib').onchange = handleNativeFile;
 }
 
 async function listCameras(){
