@@ -822,6 +822,25 @@ function renderAnalysisStep(){
   document.getElementById('runAnalysis').onclick = runAnalysis;
 }
 
+function compressForUpload(dataUrl, maxDim=1400, quality=0.78){
+  return new Promise((resolve)=>{
+    const img = new Image();
+    img.onload = ()=>{
+      let w = img.naturalWidth, h = img.naturalHeight;
+      if(w > maxDim || h > maxDim){
+        if(w > h){ h = Math.round(h * maxDim / w); w = maxDim; }
+        else { w = Math.round(w * maxDim / h); h = maxDim; }
+      }
+      const c = document.createElement('canvas');
+      c.width = w; c.height = h;
+      c.getContext('2d').drawImage(img, 0, 0, w, h);
+      resolve(c.toDataURL('image/jpeg', quality));
+    };
+    img.onerror = ()=> resolve(dataUrl);
+    img.src = dataUrl;
+  });
+}
+
 async function runAnalysis(){
   const btn = document.getElementById('runAnalysis');
   btn.disabled = true;
@@ -876,6 +895,13 @@ Regeln für "adjustments":
   const dynamicText = `Lackart dieses Auftrags: ${finishLabels[state.finishType] || 'Metallic'}\nAktuelle Rezeptur dieses Auftrags (Mengenangaben in Gramm): ${formulaSnippet}\nAnalysiere die folgenden zwei Fotos:`;
 
   try{
+    // Fotos vor dem Versand verkleinern: hält die Anfrage sicher unter Vercels 4.5MB-Limit
+    // und Anthropic skaliert intern ohnehin auf ~1568px herunter — die Analysequalität leidet also nicht.
+    const [faceUp, flopUp] = await Promise.all([
+      compressForUpload(state.shots.face),
+      compressForUpload(state.shots.flop)
+    ]);
+
     const response = await fetch("/api/analyze", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -890,14 +916,20 @@ Regeln für "adjustments":
           content: [
             { type:"text", text: dynamicText },
             { type:"text", text:"Face-Winkel-Foto:" },
-            { type:"image", source:{ type:"base64", media_type:"image/jpeg", data: state.shots.face.split(',')[1] } },
+            { type:"image", source:{ type:"base64", media_type:"image/jpeg", data: faceUp.split(',')[1] } },
             { type:"text", text:"Flop-Winkel-Foto:" },
-            { type:"image", source:{ type:"base64", media_type:"image/jpeg", data: state.shots.flop.split(',')[1] } },
+            { type:"image", source:{ type:"base64", media_type:"image/jpeg", data: flopUp.split(',')[1] } },
           ]
         }]
       })
     });
-    const data = await response.json();
+    const rawResponse = await response.text();
+    let data;
+    try{
+      data = JSON.parse(rawResponse);
+    }catch(e){
+      throw new Error('Server hat kein gültiges JSON geliefert (HTTP-Status ' + response.status + '). Antwort war: ' + rawResponse.slice(0,300));
+    }
     if(data.error){
       const msg = typeof data.error === 'string' ? data.error : (data.error.message || JSON.stringify(data.error));
       throw new Error(msg);
